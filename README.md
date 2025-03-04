@@ -12,6 +12,13 @@ See the [Workshop page](https://steamcommunity.com/sharedfiles/filedetails/?id=3
 
 Must be installed with Helper mod (which is a part of this repo under `/CMod_Helper`): https://steamcommunity.com/sharedfiles/filedetails/?id=3430199112
 
+# Terminology
+- Loader - a fake assembly (dll), containing code it's faking + Injector. Placed inside the Cosmoteer folder. It has a special name that tricks the game into loading it.
+- Injector - the code inside Loader that allows to load anything in a much easier way. It's placed alongside the code it's faking.
+- Helper - an assembly (dll) loaded by Loader that searches and loads CMods.
+- CMod - a C# mod. 
+- Hook - a method inside a CMod that gets called by Helper on a specific time, e.g. after all the game's contents has loaded.
+
 # Usage
 
 Subscribe to CMods and enable them in-game like regular mods. Restarting the game will load them in.
