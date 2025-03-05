@@ -260,12 +260,6 @@ DWORD WINAPI dllThread(HMODULE hModule)
 	LogYap("AWOOOOOGA");
 	LogYap("Loader starting");
 
-	LogYap("Sleeping for a bit before doing anything");
-
-	// Give the game time to initialize
-	// Should uhhh, hopefully fix some mysterious crashes.
-	Sleep(SLEEP_BEFORE_STARTING_MS);
-
 	LogYap("Checking where we are");
 
 	// shouldn't happen, but maybe
@@ -335,14 +329,7 @@ DWORD WINAPI dllThread(HMODULE hModule)
 		return dwExit;
 	}
 
-	// load Helper dll
-	LogYap("Sleeping for " + std::to_string(SLEEP_BEFORE_HELPER_LOAD_MS) + "ms before loading Helper DLL to not anger the space gods.");
-
-	// Give the game time to initialize
-	// Needed for the Loader to be able to access Cosmoteer variables and such.
-	Sleep(SLEEP_BEFORE_HELPER_LOAD_MS);
-
-	LogYap("Wakey-wakey! Let the Helper DLL loading commence.");
+	LogYap("Let the Helper DLL loading commence.");
 
 	fs::path cModHelperDllPath = cModHelperDirPath;
 	cModHelperDllPath /= CMOD_HELPER_DLL_FILENAME;

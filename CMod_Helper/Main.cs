@@ -1,11 +1,11 @@
 ﻿using Cosmoteer;
 using Cosmoteer.Mods;
+using Halfling.Collections;
 using Halfling.IO;
 using HarmonyLib;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Runtime.Loader;
 
 [assembly: AssemblyVersion("0.0.2")]
 [assembly: IgnoresAccessChecksTo("Cosmoteer")]
@@ -21,8 +21,6 @@ namespace System.Runtime.CompilerServices {
     }
 }
 
-
-
 namespace CMod_Helper {
     enum HelperLocation {
         LocalMods,
@@ -30,16 +28,22 @@ namespace CMod_Helper {
     }
 
     public class Main {
-        public static List<(string dllAbsPath, Assembly? assembly, string? targetNamespace)> cModsToLoad = new();
-        public static Harmony harmony;
-
-        private static string cModDllPathFromWithinCModDirectory = Path.Combine("CMod", "Main.dll");
-
 
         [UnmanagedCallersOnly]
-        public static void InitializePatches() {
+        public static async void InitializePatches() {
             FileLogger.LogInfo("Beep boop");
 
+            Variables.harmony = new Harmony("cmod_core.aliser.helper");
+            Variables.assembly = Assembly.GetExecutingAssembly();
+
+            Variables.harmony.PatchAll();
+        }
+
+        /// <summary>
+        /// Scans for CMods.
+        /// Meant to be called after Cosmoteer settings are loaded.
+        /// </summary>
+        public static void DiscoverCMods() {
             if(GameApp.IsNoModsMode) {
                 FileLogger.LogInfo("Game is launched with mods disabled. No CMods will be loaded.");
                 return;
@@ -64,10 +68,10 @@ namespace CMod_Helper {
                         break;
                 }
 
-                string modDirname = GetPathLastBit(absolutePath);
+                string modDirname = Utils.GetPathLastBit(absolutePath);
 
-                if(!IsCModModDirectory(absolutePath)) {
-                    FileLogger.LogInfo($"\t{modDirname} - Non-CMod [{modInstallSourceStr}]");
+                if(!Utils.IsCModModDirectory(absolutePath)) {
+                    FileLogger.LogInfo($"\t{modDirname} - Regular mod [{modInstallSourceStr}]");
                     continue;
                 }
 
@@ -78,58 +82,22 @@ namespace CMod_Helper {
 
                 FileLogger.LogInfo($"\t{modDirname} - CMod, TO BE LOADED [{modInstallSourceStr}]");
 
-                string dllPath = Path.Combine(absolutePath, cModDllPathFromWithinCModDirectory);
+                string dllPath = Path.Combine(absolutePath, Variables.cModDllPathFromWithinCModDirectory);
 
-                cModsToLoad.Add((dllPath, null, null));
+                Variables.cModsToLoad.Add((dllPath, null, null));
             }
 
             FileLogger.Separator();
-
-            FileLogger.LogInfo("Invoking hooks by patching");
-
-            harmony = new Harmony("cmod_core.aliser.helper");
-            var assembly = Assembly.GetExecutingAssembly();
-            harmony.PatchAll(assembly);
         }
-
-        /// Checks whether given directory is a valid CMod directory.
-        /// </summary>
-        /// <returns></returns>
-        static bool IsCModModDirectory(AbsolutePath path) {
-            return File.Exists(Path.Combine(path, cModDllPathFromWithinCModDirectory));
-        }
-
-        /// <summary>
-        /// Returns the last segment of a path.
-        /// </summary>
-        /// <param name="path"></param>
-        /// <returns></returns>
-        static string GetPathLastBit(AbsolutePath path) {
-            return path.ToString().Split(Path.DirectorySeparatorChar).Last();
-        }
-
-        /// <summary>
-        /// Checks if the given path is a directory.
-        /// </summary>
-        /// <param name="path"></param>
-        /// <exception cref="DirectoryNotFoundException">When the given path doesn't exist.</exception>
-        public static bool IsDirectory(string path) {
-            if(!Path.Exists(path)) {
-                throw new DirectoryNotFoundException(path);
-            }
-
-            return File.GetAttributes(path).HasFlag(FileAttributes.Directory);
-        }
-
 
         /// <summary>
         /// Loads CMods defined in the list of cmods to load and calling a specified method in 'Main' class inside of the predefined mod assembly.
         /// </summary>
-        /// <param name="methodName"></param>
+        /// <param name="hookName"></param>
         /// <exception cref="Exception"></exception>
-        public static void TryLoadCMods(string methodName) {
-            for(int i = 0; i < cModsToLoad.Count; i++) {
-                (string dllAbsPath, Assembly? assembly, string? targetNamespace) = cModsToLoad[i];
+        public static void InvokeHookInActiveCMods(string hookName) {
+            for(int i = 0; i < Variables.cModsToLoad.Count; i++) {
+                (string dllAbsPath, Assembly? assembly, string? targetNamespace) = Variables.cModsToLoad[i];
 
                 FileLogger.LogInfo("Processing CMod: " + dllAbsPath);
 
@@ -163,7 +131,7 @@ namespace CMod_Helper {
 
                     targetNamespace = namespaceMatches[0];
 
-                    cModsToLoad[i] = (dllAbsPath, assembly, targetNamespace);
+                    Variables.cModsToLoad[i] = (dllAbsPath, assembly, targetNamespace);
                 }
 
                 Type? classType = assembly.GetType($"{targetNamespace}.Main");
@@ -173,134 +141,17 @@ namespace CMod_Helper {
                     throw new Exception(msg);
                 }
 
-                MethodInfo? methodInfo = classType.GetMethod(methodName, BindingFlags.Static | BindingFlags.Public);
+                MethodInfo? methodInfo = classType.GetMethod(hookName, BindingFlags.Static | BindingFlags.Public);
                 if(methodInfo == null) {
+                    FileLogger.LogDebug($"Hook not defined. Skipping.");
                     continue;
                 }
 
-                FileLogger.LogInfo($"Invoking {methodName}()");
+                FileLogger.LogInfo($"Invoking {hookName}()");
 
                 methodInfo.Invoke(null, null);
             }
         }
     }
-
-    class ModAssemblyLoadContext : AssemblyLoadContext {
-        /// <summary>
-        /// TODO
-        /// Libs shipped with the Helper mod.
-        /// 
-        /// Can be used as dependency fallback in CMods.
-        /// </summary>
-        static readonly string[] cModHelperModDependencyFallbackDlls = ["0Harmony.dll"];
-
-        public ModAssemblyLoadContext()
-        : base("ModAssemblyLoadContext") { }
-
-        /// <summary>
-        /// Returns the main assembly (it should be loaded first though).
-        /// </summary>
-        /// <returns></returns>
-        /// <exception cref="NullReferenceException"></exception>
-        public static Assembly GetMainAssembly(AssemblyLoadContext ctx) {
-            Assembly? mainAssembly = ctx.Assemblies.FirstOrDefault();
-            if(mainAssembly == null) {
-                string msg = $"Failed to extract the main assembly";
-                FileLogger.LogFatal(msg);
-                throw new NullReferenceException(msg);
-            }
-
-            return mainAssembly;
-        }
-
-        /// <summary>
-        /// Resolves dependencies for a given assembly.
-        /// </summary>
-        /// <param name="ctx"></param>
-        /// <param name="depAssemblyName"></param>
-        /// <returns></returns>
-        /// <exception cref="DllNotFoundException"></exception>
-        public static Assembly? ResolveDependencies(AssemblyLoadContext ctx, AssemblyName depAssemblyName) {
-            string depAssemblyFilename = depAssemblyName.Name + ".dll";
-
-            FileLogger.LogDebug("Resolving assembly dependency: " + depAssemblyFilename);
-
-            Assembly mainAssembly = GetMainAssembly(ctx);
-            string mainAssemblyLoadedFrom = Path.GetDirectoryName(mainAssembly.Location);
-
-            // first, look through the mod libs
-            string depAssemblyPathAlongMainAssembly = Path.Combine(mainAssemblyLoadedFrom, depAssemblyFilename);
-            if(File.Exists(depAssemblyPathAlongMainAssembly)) {
-                FileLogger.LogDebug("Found along with mod DLL at: " + depAssemblyPathAlongMainAssembly);
-                return Assembly.LoadFrom(depAssemblyPathAlongMainAssembly);
-            }
-
-            // if not found, look through fallback libs shipped with Helper
-            string cModHelperModDirPath = Utils.GetPathToModRoot();
-            string depAssemblyPathAlongCModHelperModDir = Path.Combine(cModHelperModDirPath, depAssemblyFilename);
-            if(File.Exists(depAssemblyPathAlongCModHelperModDir)) {
-                FileLogger.LogDebug("Found in CMod Helper mod dir at: " + depAssemblyPathAlongCModHelperModDir);
-                return Assembly.LoadFrom(depAssemblyPathAlongCModHelperModDir);
-            }
-
-            string msg = $"Failed to load CMod DLL at: {mainAssembly.Location}. Failed to locate a dependency. Tried paths: \n- {depAssemblyPathAlongMainAssembly} \n- {depAssemblyPathAlongCModHelperModDir}";
-            FileLogger.LogFatal(msg);
-            throw new DllNotFoundException(msg);
-        }
-    }
-
-    // TODO not working currently due to how early the constructor gets called.
-    //[HarmonyPatch(typeof(ModInfo))]
-    //[HarmonyPatch("ApplyPreLoadMods")]
-    //static class Patch_ApplyPreLoadMods {
-    //    public static void Prefix() {
-    //        FileLogger.LogInfo("Patching Cosmoteer.Mods.ModInfo.ApplyPreLoadMods() [Prefix]");
-
-    //        Main.TryLoadCMods("Pre_ApplyPreLoadMods");
-
-    //        FileLogger.Separator();
-
-    //        var original = typeof(ModInfo).GetMethod("ApplyPreLoadMods");
-    //        Main.harmony.Unpatch(original, HarmonyPatchType.Prefix);
-    //    }
-
-    //    public static void Postfix() {
-    //        FileLogger.LogInfo("Patching Cosmoteer.Mods.ModInfo.ApplyPreLoadMods() [Postfix]");
-
-    //        Main.TryLoadCMods("Post_ApplyPreLoadMods");
-
-    //        FileLogger.Separator();
-
-    //        var original = typeof(ModInfo).GetMethod("ApplyPreLoadMods");
-    //        Main.harmony.Unpatch(original, HarmonyPatchType.Postfix);
-    //    }
-    //}
-
-    [HarmonyPatch(typeof(ModInfo))]
-    [HarmonyPatch("ApplyPostLoadMods")]
-    static class Patch_ApplyPostLoadMods {
-        public static void Prefix() {
-            FileLogger.LogInfo("Patching Cosmoteer.Mods.ModInfo.ApplyPostLoadMods() [Prefix]");
-
-            Main.TryLoadCMods("Pre_ApplyPostLoadMods");
-
-            FileLogger.Separator();
-
-            var original = typeof(ModInfo).GetMethod("ApplyPostLoadMods");
-            Main.harmony.Unpatch(original, HarmonyPatchType.Prefix);
-        }
-
-        public static void Postfix() {
-            FileLogger.LogInfo("Patching Cosmoteer.Mods.ModInfo.ApplyPostLoadMods() [Postfix]");
-
-            Main.TryLoadCMods("Post_ApplyPostLoadMods");
-
-            FileLogger.Separator();
-
-            var original = typeof(ModInfo).GetMethod("ApplyPostLoadMods");
-            Main.harmony.Unpatch(original, HarmonyPatchType.Postfix);
-        }
-    }
-
 }
 

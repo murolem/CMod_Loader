@@ -13,7 +13,7 @@
     <AssemblyName>CMod_Helper</AssemblyName>
 	<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
 	<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-	<Version>0.0.3</Version>
+	<Version>0.1.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
