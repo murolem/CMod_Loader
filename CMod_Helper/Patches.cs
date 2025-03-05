@@ -15,7 +15,7 @@ namespace CMod_Helper {
         public static void InvokeCModHook(string hookName, MethodInfo original, HarmonyPatchType patchType, string targetType) {
             FileLogger.LogInfo($"Invoking CMod hook {targetType} [{patchType}]");
 
-            Main.InvokeCModsHook(hookName);
+            Main.InvokeHookInActiveCMods(hookName);
 
             Variables.harmony.Unpatch(original, patchType);
 
@@ -34,36 +34,13 @@ namespace CMod_Helper {
         }
     }
 
-    //[HarmonyPatch(typeof(Cosmoteer.GameApp), MethodType.Constructor)]
-    //[HarmonyPatch("ApplyPreLoadMods")]
-    //[HarmonyPatchCategory("Core")]
-    //static class Patch_GameAppCtor {
-    //    public static void Postfix() {
-    //        // run hooks patches practically is soon is possible.
-    //        // this runs right after the game settings are set, which is required for fetching
-    //        // enabled/disabled mods
-
-    //        Main.DiscoverCMods();
-
-    //        FileLogger.LogInfo("Patching CMod hooks");
-
-    //        Variables.harmony.PatchCategory(Variables.assembly, "Hooks");
-    //    }
-    //}
-
-
     [HarmonyPatch(typeof(ModInfo))]
     [HarmonyPatch("ApplyPreLoadMods")]
-    [HarmonyPatchCategory("Hooks")]
     static class Patch_ApplyPreLoadMods {
         public static void Prefix() {
             FileLogger.LogInfo("Earliest entrypoint. Running leftover initialization before continuing with the patched code.");
 
             Main.DiscoverCMods();
-
-            //Variables.harmony.PatchCategory(Variables.assembly, "Hooks");
-
-            //Halfling.App.Director.FrameStarting -= Director_FrameStarting;
 
             Patcher.InvokeCModHook(
                 "Pre_ApplyPreLoadMods", // hook name
@@ -85,7 +62,6 @@ namespace CMod_Helper {
 
     [HarmonyPatch(typeof(ModInfo))]
     [HarmonyPatch("ApplyPostLoadMods")]
-    [HarmonyPatchCategory("Hooks")]
     static class Patch_ApplyPostLoadMods {
         public static void Prefix() {
             Patcher.InvokeCModHook(

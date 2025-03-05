@@ -36,37 +36,8 @@ namespace CMod_Helper {
             Variables.harmony = new Harmony("cmod_core.aliser.helper");
             Variables.assembly = Assembly.GetExecutingAssembly();
 
-            Variables.harmony.PatchCategory("Hooks");
-
-            //FileLogger.LogInfo("Waiting for Director to be set.");
-            //FileLogger.LogInfo("Director exists: " + (Halfling.App.Director != null).ToString());
-
-            //await WaitUntilDirectorIsSet();
-
-            //FileLogger.LogInfo("Director exists: " + (Halfling.App.Director != null).ToString());
-
-            //FileLogger.LogInfo("Waiting for a first Director frame to start.");
-
-            //Halfling.App.Director.FrameStarting += Director_FrameStarting;
+            Variables.harmony.PatchAll();
         }
-
-        //private static Task WaitUntilDirectorIsSet() {
-        //    return Tasks.WaitUntil(() => Halfling.App.Director != null, 25);
-        //}
-
-        //private static void Director_FrameStarting(object? sender, EventArgs e) {
-        //    //Variables.harmony.PatchCategory(Variables.assembly, "Core");
-
-        //    FileLogger.LogInfo("First Director frame starting.");
-
-        //    Main.DiscoverCMods();
-
-        //    FileLogger.LogInfo("Patching CMod hooks.");
-
-        //    Variables.harmony.PatchCategory(Variables.assembly, "Hooks");
-
-        //    Halfling.App.Director.FrameStarting -= Director_FrameStarting;
-        //}
 
         /// <summary>
         /// Scans for CMods.
@@ -124,7 +95,7 @@ namespace CMod_Helper {
         /// </summary>
         /// <param name="hookName"></param>
         /// <exception cref="Exception"></exception>
-        public static void InvokeCModsHook(string hookName) {
+        public static void InvokeHookInActiveCMods(string hookName) {
             for(int i = 0; i < Variables.cModsToLoad.Count; i++) {
                 (string dllAbsPath, Assembly? assembly, string? targetNamespace) = Variables.cModsToLoad[i];
 
